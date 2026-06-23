@@ -108,7 +108,7 @@ jobs:
         run: |
           aws eks update-kubeconfig \
           --region ap-south-1 \
-          --name docprescops-eks
+          --name docprescops-cluster
 
       - name: Update Backend Deployment
         run: |
