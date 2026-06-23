@@ -1,0 +1,142 @@
+name: Build & Deploy to EKS
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  AWS_REGION: ap-south-1
+  EKS_CLUSTER_NAME: docprescops-eks
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      #################################################
+      # Backend
+      #################################################
+
+      - name: Build Backend Image
+        run: |
+          docker build -t docprescops-backend ./backend
+
+      - name: Tag Backend Image
+        run: |
+          docker tag docprescops-backend:latest \
+          118774113944.dkr.ecr.ap-south-1.amazonaws.com/docprescops-backend:${{ github.sha }}
+
+      - name: Push Backend Image
+        run: |
+          docker push \
+          118774113944.dkr.ecr.ap-south-1.amazonaws.com/docprescops-backend:${{ github.sha }}
+
+      #################################################
+      # Frontend
+      #################################################
+
+      - name: Build Frontend Image
+        run: |
+          docker build -t docprescops-frontend ./frontend
+
+      - name: Tag Frontend Image
+        run: |
+          docker tag docprescops-frontend:latest \
+          118774113944.dkr.ecr.ap-south-1.amazonaws.com/docprescops-frontend:${{ github.sha }}
+
+      - name: Push Frontend Image
+        run: |
+          docker push \
+          118774113944.dkr.ecr.ap-south-1.amazonaws.com/docprescops-frontend:${{ github.sha }}
+
+      #################################################
+      # Admin
+      #################################################
+
+      - name: Build Admin Image
+        run: |
+          docker build -t docprescops-admin ./admin
+
+      - name: Tag Admin Image
+        run: |
+          docker tag docprescops-admin:latest \
+          118774113944.dkr.ecr.ap-south-1.amazonaws.com/docprescops-admin:${{ github.sha }}
+
+      - name: Push Admin Image
+        run: |
+          docker push \
+          118774113944.dkr.ecr.ap-south-1.amazonaws.com/docprescops-admin:${{ github.sha }}
+
+      #################################################
+      # ML
+      #################################################
+
+      - name: Build ML Image
+        run: |
+          docker build -t docprescops-ml ./ml
+
+      - name: Tag ML Image
+        run: |
+          docker tag docprescops-ml:latest \
+          118774113944.dkr.ecr.ap-south-1.amazonaws.com/docprescops-ml:${{ github.sha }}
+
+      - name: Push ML Image
+        run: |
+          docker push \
+          118774113944.dkr.ecr.ap-south-1.amazonaws.com/docprescops-ml:${{ github.sha }}
+
+      #################################################
+      # EKS Deployment
+      #################################################
+
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig \
+          --region ap-south-1 \
+          --name docprescops-eks
+
+      - name: Update Backend Deployment
+        run: |
+          kubectl set image deployment/docprescops-backend \
+          docprescops-backend=118774113944.dkr.ecr.ap-south-1.amazonaws.com/docprescops-backend:${{ github.sha }} \
+          -n docprescops
+
+      - name: Update Frontend Deployment
+        run: |
+          kubectl set image deployment/docprescops-frontend \
+          docprescops-frontend=118774113944.dkr.ecr.ap-south-1.amazonaws.com/docprescops-frontend:${{ github.sha }} \
+          -n docprescops
+
+      - name: Update Admin Deployment
+        run: |
+          kubectl set image deployment/docprescops-admin \
+          docprescops-admin=118774113944.dkr.ecr.ap-south-1.amazonaws.com/docprescops-admin:${{ github.sha }} \
+          -n docprescops
+
+      - name: Update ML Deployment
+        run: |
+          kubectl set image deployment/docprescops-ml \
+          docprescops-ml=118774113944.dkr.ecr.ap-south-1.amazonaws.com/docprescops-ml:${{ github.sha }} \
+          -n docprescops
+
+      - name: Verify Rollout
+        run: |
+          kubectl rollout status deployment/docprescops-backend -n docprescops
+          kubectl rollout status deployment/docprescops-frontend -n docprescops
+          kubectl rollout status deployment/docprescops-admin -n docprescops
+          kubectl rollout status deployment/docprescops-ml -n docprescops
